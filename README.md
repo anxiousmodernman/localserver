@@ -18,13 +18,13 @@ configurable types that reside in memory, speaking HTTP1 and HTTP2 over TLS.
 
 Create a CA that can sign certs for a host called server1.
 
-```
+```go
 ca, err := NewCA(WithDNSNames([]string{"server1"}))
 ```
 
 Create a signed cert for server1 with the CA object.
 
-```
+```go
 cert, err := ca.CreateSignedCert("server1")
 ```
 
@@ -32,7 +32,7 @@ Create a localhost HTTP2 server on a random high port. We provide a handler that
 echoes back our HTTP headers as a map. We provide the CA and the cert created
 earlier.
 
-```
+```go
 fn := func(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(200)
     // Header is an alias: type Header map[string][]string
@@ -48,7 +48,7 @@ Now that `svr` is listening on localhost, we can talk to it over HTTPS with a
 client that trusts the same CA. Note that since we've spun up our test sever on
 a random port, we must use the `AddrPort` method to get the actual port.
 
-```
+```go
 client := NewHTTP2Client(ca)
 url := fmt.Sprintf("https://server1:%s/", svr.AddrPort())
 resp, err := client.Get(url)
