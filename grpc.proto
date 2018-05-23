@@ -1,6 +1,5 @@
 syntax = "proto3";
 
-// Web exposes a backend server over gRPC.
 package localserver;
 
 option go_package = "github.com/anxiousmodernman/localserver";
