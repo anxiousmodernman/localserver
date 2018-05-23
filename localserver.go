@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // LocalServer is a server that can be configured to respond
@@ -138,11 +140,15 @@ func (ls *LocalServer) Stop() {
 	ls.Srv.Shutdown(context.TODO())
 }
 
-// Addr returns the network address of the LocalServer's net.Listener.
+// AddrPort returns the network address of the LocalServer's net.Listener.
 func (ls *LocalServer) AddrPort() string {
 	// match port in an address that looks like [::]:12345
+	return addrPort(ls.Lis.Addr().String())
+}
+
+func addrPort(ipv6Addr string) string {
 	re := regexp.MustCompile(`[\[\]:]+(\d+)`)
-	matches := re.FindStringSubmatch(ls.Lis.Addr().String())
+	matches := re.FindStringSubmatch(ipv6Addr)
 	proxyPort := matches[1]
 	return proxyPort
 }
@@ -339,4 +345,94 @@ func NewHTTP2Client(ca *CA) *http.Client {
 	}
 	c.Transport = tpt
 	return c
+}
+
+// GRPCServerImpl ...
+type GRPCServerImpl struct {
+	Lis net.Listener
+	Srv *grpc.Server
+}
+
+// ServeGRPC starts a grpc server asyncronously.
+func (i *GRPCServerImpl) ServeGRPC() {
+	go i.Srv.Serve(i.Lis)
+}
+
+// Stop stops our grpc server.
+func (i *GRPCServerImpl) Stop() {
+	i.Srv.Stop()
+}
+
+// Addr returns the full network address of the LocalServer's net.Listener.
+func (i *GRPCServerImpl) Addr() string {
+	return i.Lis.Addr().String()
+}
+
+// AddrPort returns the network port of the LocalServer's net.Listener.
+func (i *GRPCServerImpl) AddrPort() string {
+	// match port in an address that looks like [::]:12345
+	return addrPort(i.Lis.Addr().String())
+}
+
+/*
+ * Our implementation of generated GRPCServer interface
+ */
+
+// Get is our test method for simple unary request-response.
+func (i *GRPCServerImpl) Get(ctx context.Context, key *Key) (*Value, error) {
+	// echo key as value
+	return &Value{key.Key}, nil
+}
+
+// PutKVStream is our test method to stream from client to server.
+func (i *GRPCServerImpl) PutKVStream(stream GRPC_PutKVStreamServer) error {
+	return nil
+}
+
+// GetKVStream is our test method to stream from server to client.
+func (i *GRPCServerImpl) GetKVStream(key *Key, stream GRPC_GetKVStreamServer) error {
+	return nil
+}
+
+// NewGRPCServer spins up a server pair on a random port.
+// Inspect the Addr field on the returned server to see the port selected
+// for the server. The authority parameter is the server hostname.
+func NewGRPCServer(ca *CA, cert *SignedCert, authority string) (*GRPCServerImpl, error) {
+
+	tlsCreds := credentials.NewTLS(NewTLSConfig(ca, cert))
+	gs := grpc.NewServer(grpc.Creds(tlsCreds))
+	// This function is from generated code
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil
+	}
+	impl := GRPCServerImpl{
+		Lis: lis,
+		Srv: gs,
+	}
+
+	RegisterGRPCServer(gs, &impl)
+	return &impl, nil
+}
+
+// NewGRPCClientForServer ...
+func NewGRPCClientForServer(ca *CA, addr string) (GRPCClient, error) {
+	certs := x509.NewCertPool()
+	certs.AppendCertsFromPEM(ca.Cert)
+	tlsConf := &tls.Config{
+		RootCAs:      certs,
+		NextProtos:   []string{http2.NextProtoTLS},
+		CipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+	}
+	creds := credentials.NewTLS(tlsConf)
+
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(creds),
+		grpc.WithBlock(),
+		grpc.WithTimeout(3*time.Second))
+	if err != nil {
+		return nil, err
+	}
+	// ProxyClient, our generated client interface
+	c := NewGRPCClient(conn)
+	return c, nil
 }

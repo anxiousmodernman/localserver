@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package localserver;
+
+option go_package = "github.com/anxiousmodernman/localserver";
+
+service GRPC {
+    rpc Get(Key) returns (Value) {}
+    rpc PutKVStream(stream KV) returns (OpResult) {}
+    rpc GetKVStream(Key) returns (stream KV) {}
+}
+
+message Key {
+    string key = 1;
+}
+
+message Value {
+    string value = 1;
+}
+
+message KV {
+    string key = 1;
+    string value = 2;
+}
+
+message OpResult {
+    int64 err_code = 1;
+}
+
