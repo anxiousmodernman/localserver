@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -386,11 +387,25 @@ func (i *GRPCServerImpl) Get(ctx context.Context, key *Key) (*Value, error) {
 
 // PutKVStream is our test method to stream from client to server.
 func (i *GRPCServerImpl) PutKVStream(stream GRPC_PutKVStreamServer) error {
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // GetKVStream is our test method to stream from server to client.
 func (i *GRPCServerImpl) GetKVStream(key *Key, stream GRPC_GetKVStreamServer) error {
+	// send stream of 3
+	for _, item := range []string{"1", "2", "3"} {
+		if err := stream.Send(&KV{item, item}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
