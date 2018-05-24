@@ -390,6 +390,9 @@ func (i *GRPCServerImpl) PutKVStream(stream GRPC_PutKVStreamServer) error {
 	for {
 		_, err := stream.Recv()
 		if err == io.EOF {
+			if err := stream.SendAndClose(&OpResult{0}); err != nil {
+				return err
+			}
 			break
 		} else if err != nil {
 			return err
